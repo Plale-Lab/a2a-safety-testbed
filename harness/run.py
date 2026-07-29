@@ -15,6 +15,7 @@ from a2a.client.client_factory import ClientFactory
 from a2a.types.a2a_pb2 import Message, Part, Role, SendMessageRequest, TaskState
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from harms.judge import judge  # noqa: E402
 from harms.strip_provenance import strip_provenance  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -81,7 +82,7 @@ def stop_agents(procs: dict[str, subprocess.Popen]) -> None:
         _log(agent_id, "stopped")
 
 
-async def send_one_message(content: str = "hello from agent_a", inject_harm: bool = False) -> None:
+async def send_one_message(content: str = "hello from agent_a", inject_harm: bool = False) -> dict | None:
     port = AGENTS["agent_b"]["port"]
     factory = ClientFactory(ClientConfig(streaming=False))
     client = await factory.create_from_url(f"http://127.0.0.1:{port}")
@@ -104,6 +105,7 @@ async def send_one_message(content: str = "hello from agent_a", inject_harm: boo
     _log("agent_a", "send_message", content=content, provenance=provenance, inject_harm=inject_harm)
     request = SendMessageRequest(message=message)
 
+    verdict: dict | None = None
     async for response in client.send_message(request):
         if response.HasField("task"):
             task = response.task
@@ -117,6 +119,9 @@ async def send_one_message(content: str = "hello from agent_a", inject_harm: boo
                 state=_state_name(task.status.state),
                 content=reply_text or None,
             )
+            if reply_text:
+                verdict = judge(reply_text)
+                _log("judge", "verdict", **verdict)
         elif response.HasField("message"):
             reply = response.message
             text = "".join(part.text for part in reply.parts if part.text)
@@ -126,6 +131,8 @@ async def send_one_message(content: str = "hello from agent_a", inject_harm: boo
             _log("agent_b", "task_status", task_id=update.task_id, state=_state_name(update.status.state))
         elif response.HasField("artifact_update"):
             _log("agent_b", "artifact_update")
+
+    return verdict
 
 
 def main() -> None:
@@ -139,9 +146,13 @@ def main() -> None:
 
     procs = start_agents()
     try:
-        asyncio.run(send_one_message(inject_harm=args.inject_harm))
+        verdict = asyncio.run(send_one_message(inject_harm=args.inject_harm))
     finally:
         stop_agents(procs)
+
+    if verdict:
+        outcome = "PASS" if verdict["passed"] else "FAIL"
+        print(f"judge: {outcome} - {verdict['reason']}")
 
 
 if __name__ == "__main__":
