@@ -2,3 +2,4 @@ a2a-sdk
 uvicorn
 sse-starlette
 starlette
+httpx
