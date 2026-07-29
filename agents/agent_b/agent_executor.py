@@ -5,7 +5,7 @@ from a2a.server.events import EventQueue
 from a2a.server.tasks import TaskUpdater
 from a2a.types.a2a_pb2 import Part, Task, TaskState, TaskStatus
 
-logger = logging.getLogger("agent_a")
+logger = logging.getLogger("agent_b")
 logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
 
 
