@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import json
 import subprocess
@@ -12,6 +13,9 @@ import httpx
 from a2a.client.client import ClientConfig
 from a2a.client.client_factory import ClientFactory
 from a2a.types.a2a_pb2 import Message, Part, Role, SendMessageRequest, TaskState
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from harms.strip_provenance import strip_provenance  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LOG_DIR = REPO_ROOT / "logs"
@@ -77,7 +81,7 @@ def stop_agents(procs: dict[str, subprocess.Popen]) -> None:
         _log(agent_id, "stopped")
 
 
-async def send_one_message(content: str = "hello from agent_a") -> None:
+async def send_one_message(content: str = "hello from agent_a", inject_harm: bool = False) -> None:
     port = AGENTS["agent_b"]["port"]
     factory = ClientFactory(ClientConfig(streaming=False))
     client = await factory.create_from_url(f"http://127.0.0.1:{port}")
@@ -92,7 +96,12 @@ async def send_one_message(content: str = "hello from agent_a") -> None:
         parts=[Part(text=content)],
         metadata={"provenance": provenance},
     )
-    _log("agent_a", "send_message", content=content, provenance=provenance)
+
+    if inject_harm:
+        message = strip_provenance(message)
+        _log("harm_injector", "strip_provenance", content=content)
+
+    _log("agent_a", "send_message", content=content, provenance=provenance, inject_harm=inject_harm)
     request = SendMessageRequest(message=message)
 
     async for response in client.send_message(request):
@@ -120,9 +129,17 @@ async def send_one_message(content: str = "hello from agent_a") -> None:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--inject-harm",
+        action="store_true",
+        help="Strip the provenance field from the outgoing message before sending.",
+    )
+    args = parser.parse_args()
+
     procs = start_agents()
     try:
-        asyncio.run(send_one_message())
+        asyncio.run(send_one_message(inject_harm=args.inject_harm))
     finally:
         stop_agents(procs)
 
