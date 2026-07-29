@@ -82,7 +82,7 @@ def stop_agents(procs: dict[str, subprocess.Popen]) -> None:
         _log(agent_id, "stopped")
 
 
-async def send_one_message(content: str = "hello from agent_a", inject_harm: bool = False) -> dict | None:
+async def send_one_message(content: str = "hello from agent_a", inject_harm: bool = False) -> dict:
     port = AGENTS["agent_b"]["port"]
     factory = ClientFactory(ClientConfig(streaming=False))
     client = await factory.create_from_url(f"http://127.0.0.1:{port}")
@@ -106,6 +106,7 @@ async def send_one_message(content: str = "hello from agent_a", inject_harm: boo
     request = SendMessageRequest(message=message)
 
     verdict: dict | None = None
+    reply_text = ""
     async for response in client.send_message(request):
         if response.HasField("task"):
             task = response.task
@@ -132,27 +133,67 @@ async def send_one_message(content: str = "hello from agent_a", inject_harm: boo
         elif response.HasField("artifact_update"):
             _log("agent_b", "artifact_update")
 
-    return verdict
+    return {"inject_harm": inject_harm, "reply_text": reply_text, "verdict": verdict}
+
+
+async def run_both() -> tuple[dict, dict]:
+    clean = await send_one_message(inject_harm=False)
+    injected = await send_one_message(inject_harm=True)
+    return clean, injected
+
+
+def _print_comparison(clean: dict, injected: dict) -> None:
+    def outcome(result: dict) -> tuple[str, str]:
+        verdict = result["verdict"]
+        passed = bool(verdict and verdict["passed"])
+        return ("present" if passed else "MISSING"), ("PASS" if passed else "FAIL")
+
+    clean_provenance, clean_judge = outcome(clean)
+    injected_provenance, injected_judge = outcome(injected)
+
+    rows = [
+        ("Condition", "Provenance", "Judge"),
+        ("clean", clean_provenance, clean_judge),
+        ("--inject-harm", injected_provenance, injected_judge),
+    ]
+    widths = [max(len(row[i]) for row in rows) for i in range(3)]
+
+    print()
+    print("A2A Safety Testbed -- Before/After Comparison")
+    print("=" * (sum(widths) + 6))
+    for row in rows:
+        print(" | ".join(cell.ljust(width) for cell, width in zip(row, widths)))
+    print("=" * (sum(widths) + 6))
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "--inject-harm",
         action="store_true",
         help="Strip the provenance field from the outgoing message before sending.",
+    )
+    mode.add_argument(
+        "--compare",
+        action="store_true",
+        help="Run both conditions (clean and --inject-harm) back-to-back and print a comparison.",
     )
     args = parser.parse_args()
 
     procs = start_agents()
     try:
-        verdict = asyncio.run(send_one_message(inject_harm=args.inject_harm))
+        if args.compare:
+            clean, injected = asyncio.run(run_both())
+            _print_comparison(clean, injected)
+        else:
+            result = asyncio.run(send_one_message(inject_harm=args.inject_harm))
+            verdict = result["verdict"]
+            if verdict:
+                outcome = "PASS" if verdict["passed"] else "FAIL"
+                print(f"judge: {outcome} - {verdict['reason']}")
     finally:
         stop_agents(procs)
-
-    if verdict:
-        outcome = "PASS" if verdict["passed"] else "FAIL"
-        print(f"judge: {outcome} - {verdict['reason']}")
 
 
 if __name__ == "__main__":

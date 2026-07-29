@@ -17,7 +17,20 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Run agent_a
+## Run the before/after comparison
+
+Starts both agents, sends one message clean and one with the harm injector
+on, prints a pass/fail comparison, then tears the agents down:
+
+```bash
+source venv/bin/activate
+python harness/run.py --compare
+```
+
+Other harness modes: `python harness/run.py` (single clean run), `python
+harness/run.py --inject-harm` (single run with provenance stripped).
+
+## Run agent_a standalone
 
 ```bash
 source venv/bin/activate
