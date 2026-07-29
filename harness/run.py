@@ -82,12 +82,17 @@ async def send_one_message(content: str = "hello from agent_a") -> None:
     factory = ClientFactory(ClientConfig(streaming=False))
     client = await factory.create_from_url(f"http://127.0.0.1:{port}")
 
+    provenance = {
+        "source_agent_id": "agent_a",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
     message = Message(
         message_id=str(uuid.uuid4()),
         role=Role.ROLE_USER,
         parts=[Part(text=content)],
+        metadata={"provenance": provenance},
     )
-    _log("agent_a", "send_message", content=content)
+    _log("agent_a", "send_message", content=content, provenance=provenance)
     request = SendMessageRequest(message=message)
 
     async for response in client.send_message(request):

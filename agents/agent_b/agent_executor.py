@@ -1,5 +1,7 @@
 import logging
 
+from google.protobuf.json_format import MessageToDict
+
 from a2a.server.agent_execution import AgentExecutor, RequestContext
 from a2a.server.events import EventQueue
 from a2a.server.tasks import TaskUpdater
@@ -10,7 +12,7 @@ logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
 
 
 class EchoAgentExecutor(AgentExecutor):
-    """Acknowledges the incoming message and echoes its text back."""
+    """Acknowledges the incoming message, echoes its text and provenance back."""
 
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
         updater = TaskUpdater(event_queue, context.task_id, context.context_id)
@@ -28,7 +30,12 @@ class EchoAgentExecutor(AgentExecutor):
         await updater.start_work()
 
         user_text = context.get_user_input()
-        reply = updater.new_agent_message([Part(text=f"echo: {user_text}")])
+        incoming_metadata = MessageToDict(context.message.metadata) if context.message else {}
+        provenance = incoming_metadata.get("provenance")
+        logger.info("task %s: received provenance=%s", context.task_id, provenance)
+
+        reply_text = f"echo: {user_text} | provenance: {provenance if provenance else 'MISSING'}"
+        reply = updater.new_agent_message([Part(text=reply_text)])
 
         logger.info("task %s: completed", context.task_id)
         await updater.complete(message=reply)
