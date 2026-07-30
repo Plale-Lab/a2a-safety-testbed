@@ -43,3 +43,5 @@ Key facts learned so far:
 ## Build complete (Sessions 3-9)
 
 Functional POC done: `python harness/run.py --compare` is the one-command demo artifact. Session 10 (one-page README for Beth + dry run) is a separate pass, not part of this build.
+
+- [x] **Session 10 — Demo packaging.** Rewrote `README.md` as the one-pager: "What it shows," an explicit "what this maps to in the proposal" section (Aim 2/Attribution — note the aim renumbered since this testbed's plan doc was written; Attribution is Aim 2, not Aim 1, in the current `Proposal Body.docx`), the quick-demo command + expected output, then setup/other-modes. Framing is deliberately honest about scope: this demonstrates the *vulnerability* Aim 2 addresses (a bare, strippable `metadata` field with nothing at the protocol level to notice tampering) rather than claiming to implement Aim 2's proposed extension (persistent identity binding, provenance envelope) — the judge script is a stand-in for protocol-level enforcement, not a version of it. **Verified**: dry-ran `python harness/run.py --compare` fresh, exit 0, same clean/PASS vs. injected/FAIL table as every prior run.
