@@ -1,8 +1,13 @@
 import argparse
+import sys
+from pathlib import Path
 
 import uvicorn
 from google.protobuf.json_format import MessageToDict
 from starlette.applications import Starlette
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from harms.drop_hedge import drop_hedge  # noqa: E402
 
 from a2a.server.agent_execution import AgentExecutor, RequestContext
 from a2a.server.events import EventQueue
@@ -22,14 +27,20 @@ from a2a.types.a2a_pb2 import (
 
 
 class RelayAgentExecutor(AgentExecutor):
-    """Faithfully forwards whatever text + provenance metadata it receives.
+    """Forwards whatever text + provenance metadata it receives.
 
     Stands in for one supervisor in the Weather Warning Agent Swarm's
     peer-to-peer coordination chain (see proposal Use Cases doc): a
-    supervisor relays a sensor reading toward the next supervisor unchanged
-    unless something (harness-side harm injection, or a lossy-relay mode
-    added in a later checkpoint) alters it along the way.
+    supervisor relays a sensor reading toward the next supervisor. By
+    default this is faithful (unchanged). In lossy_relay mode, it drops
+    hedge/uncertainty language from the text -- simulating classification/
+    inference failure as an emergent property of ordinary relay behavior,
+    not an external attack (contrast with the harness-side strip_provenance
+    injector, which models tampering in transit).
     """
+
+    def __init__(self, lossy_relay: bool = False):
+        self.lossy_relay = lossy_relay
 
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
         updater = TaskUpdater(event_queue, context.task_id, context.context_id)
@@ -44,6 +55,9 @@ class RelayAgentExecutor(AgentExecutor):
         await updater.start_work()
 
         user_text = context.get_user_input()
+        if self.lossy_relay:
+            user_text = drop_hedge(user_text)
+
         incoming_metadata = MessageToDict(context.message.metadata) if context.message else {}
         provenance = incoming_metadata.get("provenance")
 
@@ -56,7 +70,7 @@ class RelayAgentExecutor(AgentExecutor):
         await updater.update_status(state=TaskState.TASK_STATE_CANCELED)
 
 
-def build_app(agent_id: str, port: int) -> Starlette:
+def build_app(agent_id: str, port: int, lossy_relay: bool = False) -> Starlette:
     skill = AgentSkill(
         id="relay",
         name="Relay",
@@ -85,7 +99,7 @@ def build_app(agent_id: str, port: int) -> Starlette:
     )
 
     request_handler = DefaultRequestHandler(
-        agent_executor=RelayAgentExecutor(),
+        agent_executor=RelayAgentExecutor(lossy_relay=lossy_relay),
         task_store=InMemoryTaskStore(),
         agent_card=agent_card,
     )
@@ -100,7 +114,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--id", required=True, help="Agent ID, e.g. supervisor_1")
     parser.add_argument("--port", required=True, type=int)
+    parser.add_argument(
+        "--lossy-relay",
+        action="store_true",
+        help="Drop hedge/uncertainty language from relayed text (simulates classification/inference failure).",
+    )
     args = parser.parse_args()
 
-    app = build_app(args.id, args.port)
+    app = build_app(args.id, args.port, lossy_relay=args.lossy_relay)
     uvicorn.run(app, host="127.0.0.1", port=args.port)

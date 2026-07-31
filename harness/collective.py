@@ -16,6 +16,7 @@ from a2a.client.client_factory import ClientFactory
 from a2a.types.a2a_pb2 import Message, Part, Role, SendMessageRequest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from harms.judge import judge_hedge_integrity  # noqa: E402
 from harms.strip_provenance import strip_provenance  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -57,16 +58,15 @@ def _wait_for_ready(port: int, timeout: float = 10.0) -> None:
     raise TimeoutError(f"agent on port {port} did not become ready in {timeout}s")
 
 
-def start_agents() -> dict[str, subprocess.Popen]:
+def start_agents(lossy_relay_at: int | None = None) -> dict[str, subprocess.Popen]:
     LOG_DIR.mkdir(exist_ok=True)
     procs: dict[str, subprocess.Popen] = {}
-    for agent in CHAIN:
+    for hop_index, agent in enumerate(CHAIN, start=1):
+        cmd = [sys.executable, str(COLLECTIVE_AGENT_SCRIPT), "--id", agent["id"], "--port", str(agent["port"])]
+        if hop_index == lossy_relay_at:
+            cmd.append("--lossy-relay")
         log_file = open(LOG_DIR / f"{agent['id']}.log", "w")
-        procs[agent["id"]] = subprocess.Popen(
-            [sys.executable, str(COLLECTIVE_AGENT_SCRIPT), "--id", agent["id"], "--port", str(agent["port"])],
-            stdout=log_file,
-            stderr=subprocess.STDOUT,
-        )
+        procs[agent["id"]] = subprocess.Popen(cmd, stdout=log_file, stderr=subprocess.STDOUT)
     for agent in CHAIN:
         _wait_for_ready(agent["port"])
         _log(agent["id"], "ready", port=agent["port"])
@@ -146,9 +146,16 @@ def main() -> None:
         metavar="HOP",
         help="1-based hop index at which to strip provenance from the outgoing message.",
     )
+    parser.add_argument(
+        "--lossy-relay-at",
+        type=int,
+        default=None,
+        metavar="HOP",
+        help="1-based hop index whose agent drops hedge language when relaying.",
+    )
     args = parser.parse_args()
 
-    procs = start_agents()
+    procs = start_agents(lossy_relay_at=args.lossy_relay_at)
     try:
         result = asyncio.run(run_chain(inject_provenance_loss_at=args.inject_provenance_loss_at))
     finally:
@@ -158,6 +165,10 @@ def main() -> None:
     print("Final message after full chain:")
     print(f"  content:    {result['final_content']}")
     print(f"  provenance: {result['final_provenance']}")
+
+    verdict = judge_hedge_integrity(ORIGIN_CLAIM, result["final_content"])
+    outcome = "PASS" if verdict["passed"] else "FAIL"
+    print(f"  judge (hedge integrity): {outcome} - {verdict['reason']}")
 
 
 if __name__ == "__main__":
