@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import json
 import subprocess
@@ -13,6 +14,9 @@ from google.protobuf.json_format import MessageToDict
 from a2a.client.client import ClientConfig
 from a2a.client.client_factory import ClientFactory
 from a2a.types.a2a_pb2 import Message, Part, Role, SendMessageRequest
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from harms.strip_provenance import strip_provenance  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LOG_DIR = REPO_ROOT / "logs"
@@ -80,7 +84,9 @@ def stop_agents(procs: dict[str, subprocess.Popen]) -> None:
         _log(agent_id, "stopped")
 
 
-async def _call_agent(port: int, text: str, metadata: dict | None) -> tuple[str, dict | None]:
+async def _call_agent(
+    port: int, text: str, metadata: dict | None, inject_provenance_loss: bool = False
+) -> tuple[str, dict | None]:
     """Sends one message to the agent at `port`, returns (reply_text, reply_metadata)."""
     factory = ClientFactory(ClientConfig(streaming=False))
     client = await factory.create_from_url(f"http://127.0.0.1:{port}")
@@ -91,6 +97,10 @@ async def _call_agent(port: int, text: str, metadata: dict | None) -> tuple[str,
         parts=[Part(text=text)],
         metadata=metadata or {},
     )
+    if inject_provenance_loss:
+        message = strip_provenance(message)
+        _log("harm_injector", "strip_provenance", port=port)
+
     request = SendMessageRequest(message=message)
 
     reply_text = ""
@@ -103,8 +113,12 @@ async def _call_agent(port: int, text: str, metadata: dict | None) -> tuple[str,
     return reply_text, reply_metadata
 
 
-async def run_chain() -> dict:
-    """Walks the origin claim through the full supervisor chain, hop by hop."""
+async def run_chain(inject_provenance_loss_at: int | None = None) -> dict:
+    """Walks the origin claim through the full supervisor chain, hop by hop.
+
+    inject_provenance_loss_at: 1-based hop index at which to strip provenance
+    from the outgoing message, simulating tampering in transit at that hop.
+    """
     text = ORIGIN_CLAIM
     metadata = {"provenance": {"source_agent_id": ORIGIN_SOURCE, "timestamp": datetime.now(timezone.utc).isoformat()}}
 
@@ -112,7 +126,8 @@ async def run_chain() -> dict:
 
     hops = []
     for hop_index, agent in enumerate(CHAIN, start=1):
-        reply_text, reply_metadata = await _call_agent(agent["port"], text, metadata)
+        inject_here = hop_index == inject_provenance_loss_at
+        reply_text, reply_metadata = await _call_agent(agent["port"], text, metadata, inject_provenance_loss=inject_here)
         provenance = (reply_metadata or {}).get("provenance")
         _log(agent["id"], "relayed", hop=hop_index, content=reply_text, provenance=provenance)
 
@@ -123,9 +138,19 @@ async def run_chain() -> dict:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--inject-provenance-loss-at",
+        type=int,
+        default=None,
+        metavar="HOP",
+        help="1-based hop index at which to strip provenance from the outgoing message.",
+    )
+    args = parser.parse_args()
+
     procs = start_agents()
     try:
-        result = asyncio.run(run_chain())
+        result = asyncio.run(run_chain(inject_provenance_loss_at=args.inject_provenance_loss_at))
     finally:
         stop_agents(procs)
 
