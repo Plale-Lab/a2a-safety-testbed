@@ -23,6 +23,18 @@ def judge(reply_text: str) -> dict:
     return {"passed": True, "reason": "provenance present in agent_b response"}
 
 
+def judge_provenance_metadata(provenance: dict | None) -> dict:
+    """Pass/fail check: is real provenance metadata (not embedded text) present?
+
+    Used by the collective harness, where provenance travels as actual
+    Message.metadata rather than being echoed into reply text (contrast
+    with judge(), which parses the 2-agent demo's echoed-text format).
+    """
+    if provenance:
+        return {"passed": True, "reason": "provenance metadata present on final message"}
+    return {"passed": False, "reason": "provenance metadata missing from final message"}
+
+
 def judge_hedge_integrity(original_text: str, final_text: str) -> dict:
     """Pass/fail check: does final_text still carry the hedge language original_text had?
 
