@@ -40,8 +40,15 @@ Key facts learned so far:
   --inject-harm | MISSING    | FAIL
   ```
 
-## Build complete (Sessions 3-9)
-
-Functional POC done: `python harness/run.py --compare` is the one-command demo artifact. Session 10 (one-page README for Beth + dry run) is a separate pass, not part of this build.
-
 - [x] **Session 10 — Demo packaging.** Rewrote `README.md` as the one-pager: "What it shows," an explicit "what this maps to in the proposal" section (Aim 2/Attribution — note the aim renumbered since this testbed's plan doc was written; Attribution is Aim 2, not Aim 1, in the current `Proposal Body.docx`), the quick-demo command + expected output, then setup/other-modes. Framing is deliberately honest about scope: this demonstrates the *vulnerability* Aim 2 addresses (a bare, strippable `metadata` field with nothing at the protocol level to notice tampering) rather than claiming to implement Aim 2's proposed extension (persistent identity binding, provenance envelope) — the judge script is a stand-in for protocol-level enforcement, not a version of it. **Verified**: dry-ran `python harness/run.py --compare` fresh, exit 0, same clean/PASS vs. injected/FAIL table as every prior run.
+
+## Build complete (Sessions 3-10)
+
+Functional POC done: `python harness/run.py --compare` is the one-command demo artifact.
+
+## Collective harms testbed (extends the demo above -- agent collectives, multiple synthetic harms)
+
+Grounded in the Weather Warning Agent Swarm use case: 4 agents (`supervisor_1`..`supervisor_4`) stand in for 4 of the real use case's 15 drone-swarm supervisors, relaying a hedged sensor-reading claim ("preliminary reading: possible funnel cloud rotation, sector 7") toward `supervisor_4` (stand-in for the agent that would trigger the public take-cover notice). Two harms in scope: loss of traceability (already built, generalizing to any hop) and classification/inference failure (new — a hedge that erodes into unqualified fact through ordinary relay). `agents/agent_a/`, `agents/agent_b/`, `harness/run.py` are untouched throughout — this is additive.
+
+- [x] **Checkpoint 1 — Generic parameterized agent.** `agents/collective_agent.py`: one script (`--id`, `--port`), `RelayAgentExecutor` faithfully forwards text + provenance metadata (same initial-`Task`-before-status-update pattern as the 2-agent demo). **Verified**: booted 4 instances (`supervisor_1`..`supervisor_4`, ports 9101-9104) standalone, each served a correctly-identified, valid AgentCard.
+- [x] **Checkpoint 2 — Harness orchestrates the clean chain.** `harness/collective.py`: starts all 4 as subprocesses, sends an origin claim (hedged sensor reading + provenance tagged to `supervisor_1`) to `supervisor_1`, feeds each reply as the next hop's input through `supervisor_2` -> `supervisor_3` -> `supervisor_4`, structured JSON log per hop. **Verified**: `python harness/collective.py` runs the full 4-hop chain unattended, exit 0; final message after all 4 hops still has the original content (hedge intact: "preliminary... possible...") and the original provenance (`source_agent_id: supervisor_1`) unchanged.
