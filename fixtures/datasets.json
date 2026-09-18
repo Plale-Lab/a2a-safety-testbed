@@ -1,0 +1,7 @@
+[
+  {"dataset_id": "air-quality-north", "version": "1.0", "administrative_domain": "north.example", "accountable_principal": "example-data-lab", "checksum": "sha256:3ed17aad44b4d2de6e9034fbc1b4a53dc93f3cdac6c81410dd85373bfd99f2da", "collection_date": "2026-01-15", "evidentiary_status": "verified"},
+  {"dataset_id": "air-quality-south", "version": "1.0", "administrative_domain": "south.example", "accountable_principal": "example-data-lab", "checksum": "sha256:6397dc4b6ead8be7aeec958efcae9faec61fb10ead4079fc8c7a7795aca53e37", "collection_date": "2026-01-15", "evidentiary_status": "verified"},
+  {"dataset_id": "river-flow-west", "version": "2.1", "administrative_domain": "west.example", "accountable_principal": "example-data-lab", "checksum": "sha256:bc245a007cad52a25564c1e747a4df84af69403579dcd290939e8d09aa56cdba", "collection_date": "2026-02-01", "evidentiary_status": "certified"},
+  {"dataset_id": "river-flow-east", "version": "2.1", "administrative_domain": "east.example", "accountable_principal": "example-data-lab", "checksum": "sha256:8ca19edeed7e299b05b4f40258e16c96650dbd83e0f518ae4bc8f9c8359a361c", "collection_date": "2026-02-01", "evidentiary_status": "certified"},
+  {"dataset_id": "meteorology-central", "version": "3.0", "administrative_domain": "central.example", "accountable_principal": "example-data-lab", "checksum": "sha256:65650f2383d52206756fc8f7488dd91485e8e1ae7cf8819f6f70490f0fa1cdbb", "collection_date": "2026-03-01", "evidentiary_status": "provisional"}
+]

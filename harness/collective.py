@@ -85,11 +85,35 @@ def stop_agents(procs: dict[str, subprocess.Popen]) -> None:
         _log(agent_id, "stopped")
 
 
+async def _log_payload(direction: str, label: str, url: str, body: bytes) -> None:
+    try:
+        payload = json.loads(body)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return
+    print(f"\n--- {label} | {direction} {url} ---")
+    print(json.dumps(payload, indent=2))
+
+
 async def _call_agent(
-    port: int, text: str, metadata: dict | None, inject_provenance_loss: bool = False
+    port: int, text: str, metadata: dict | None, inject_provenance_loss: bool = False, label: str = ""
 ) -> tuple[str, dict | None]:
-    """Sends one message to the agent at `port`, returns (reply_text, reply_metadata)."""
-    factory = ClientFactory(ClientConfig(streaming=False))
+    """Sends one message to the agent at `port`, returns (reply_text, reply_metadata).
+
+    Prints the raw JSON-RPC request/response bodies as they cross the wire
+    (filtered to POST calls, so the agent-card discovery GET is left out).
+    """
+
+    async def _on_request(request: httpx.Request) -> None:
+        if request.method == "POST":
+            await _log_payload("REQUEST ->", label, str(request.url), request.content)
+
+    async def _on_response(response: httpx.Response) -> None:
+        if response.request.method == "POST":
+            await response.aread()
+            await _log_payload("RESPONSE <-", label, str(response.request.url), response.content)
+
+    httpx_client = httpx.AsyncClient(event_hooks={"request": [_on_request], "response": [_on_response]})
+    factory = ClientFactory(ClientConfig(streaming=False, httpx_client=httpx_client))
     client = await factory.create_from_url(f"http://127.0.0.1:{port}")
 
     message = Message(
@@ -114,11 +138,13 @@ async def _call_agent(
     return reply_text, reply_metadata
 
 
-async def run_chain(inject_provenance_loss_at: int | None = None) -> dict:
+async def run_chain(inject_provenance_loss_at: int | None = None, condition_label: str = "") -> dict:
     """Walks the origin claim through the full supervisor chain, hop by hop.
 
     inject_provenance_loss_at: 1-based hop index at which to strip provenance
     from the outgoing message, simulating tampering in transit at that hop.
+    condition_label: prefix used when printing the raw request/response
+    payloads for each hop (e.g. "CLEAN", "TRACEABILITY-LOSS").
     """
     text = ORIGIN_CLAIM
     metadata = {"provenance": {"source_agent_id": ORIGIN_SOURCE, "timestamp": datetime.now(timezone.utc).isoformat()}}
@@ -128,7 +154,10 @@ async def run_chain(inject_provenance_loss_at: int | None = None) -> dict:
     hops = []
     for hop_index, agent in enumerate(CHAIN, start=1):
         inject_here = hop_index == inject_provenance_loss_at
-        reply_text, reply_metadata = await _call_agent(agent["port"], text, metadata, inject_provenance_loss=inject_here)
+        label = f"{condition_label} hop {hop_index} -> {agent['id']}".strip()
+        reply_text, reply_metadata = await _call_agent(
+            agent["port"], text, metadata, inject_provenance_loss=inject_here, label=label
+        )
         provenance = (reply_metadata or {}).get("provenance")
         _log(agent["id"], "relayed", hop=hop_index, content=reply_text, provenance=provenance)
 
@@ -150,14 +179,16 @@ def run_compare() -> dict[str, dict]:
 
     procs = start_agents()
     try:
-        results["clean"] = asyncio.run(run_chain())
-        results["traceability_loss"] = asyncio.run(run_chain(inject_provenance_loss_at=COMPARE_HOP))
+        results["clean"] = asyncio.run(run_chain(condition_label="CLEAN"))
+        results["traceability_loss"] = asyncio.run(
+            run_chain(inject_provenance_loss_at=COMPARE_HOP, condition_label="TRACEABILITY-LOSS")
+        )
     finally:
         stop_agents(procs)
 
     procs = start_agents(lossy_relay_at=COMPARE_HOP)
     try:
-        results["inference_failure"] = asyncio.run(run_chain())
+        results["inference_failure"] = asyncio.run(run_chain(condition_label="INFERENCE-FAILURE"))
     finally:
         stop_agents(procs)
 

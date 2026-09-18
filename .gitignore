@@ -3,3 +3,6 @@ __pycache__/
 *.pyc
 .env
 logs/
+results/
+__pycache__/
+*.py[cod]

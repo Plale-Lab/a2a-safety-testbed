@@ -93,6 +93,29 @@ clean                         | present    | preserved | PASS
 
 Other modes: `python harness/collective.py` (clean run), `--inject-provenance-loss-at HOP`, `--lossy-relay-at HOP` (single-hop, single-harm runs). `agents/agent_a/`, `agents/agent_b/`, and `harness/run.py` are untouched by any of this — the two demos coexist independently.
 
+## Dataset attribution evaluation
+
+`harness/datasets.py` is a paired, deterministic evaluation for BEACON's
+attribution work.  A source agent sends five dataset descriptors to a separately
+run index agent over A2A.  `stock` A2A accepts the payload as supplied.  The
+`extended` condition verifies a signed, versioned provenance envelope and checks
+the descriptors against an independently trusted manifest before atomically
+persisting them to a SQLite workset.
+
+```bash
+source venv/bin/activate
+python harness/datasets.py --compare --repetitions 30
+```
+
+The comparison covers a clean batch, removed provenance, post-signing content
+substitution, forged identity, an unknown key, and an authorized source signing
+a descriptor whose checksum conflicts with the trusted manifest.  Each run writes
+raw observations, incident evidence, SQLite worksets, and a Markdown report under
+`results/datasets/<run-id>/`.  Fixture identities and the manifest are local test
+trust roots; this is an application-level experimental A2A extension, not a claim
+that Agent Cards themselves establish identity or that a signature establishes a
+dataset's truth.
+
 ## Run agent_a standalone
 
 ```bash
