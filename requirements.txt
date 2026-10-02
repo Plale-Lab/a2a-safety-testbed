@@ -4,3 +4,4 @@ uvicorn==0.53.0
 sse-starlette==3.4.11
 starlette==1.6.0
 httpx==0.28.1
+ray==2.58.0

@@ -72,13 +72,14 @@ def scenario_payload(scenario: str, run_id: str, message_id: str) -> tuple[list[
     return descriptors, envelope
 
 
-async def send(port: int, scenario: str, run_id: str) -> dict[str, Any]:
-    message_id = str(uuid.uuid4())
+async def send(port: int, scenario: str, run_id: str, idempotency_key: str | None = None) -> dict[str, Any]:
+    message_id = idempotency_key or str(uuid.uuid4())
+    transport_message_id = str(uuid.uuid4())
     descriptors, envelope = scenario_payload(scenario, run_id, message_id)
     payload = {"run_id": run_id, "message_id": message_id, "descriptors": descriptors}
     # This value measures the actual application payload supplied to A2A before SDK framing.
     payload_bytes = len(canonical_json(payload)) + len(canonical_json(envelope)) if envelope else len(canonical_json(payload))
-    message = Message(message_id=message_id, role=Role.ROLE_USER, parts=[Part(text=json.dumps(payload, sort_keys=True, separators=(",", ":")))], metadata={"beacon_provenance": envelope} if envelope else {})
+    message = Message(message_id=transport_message_id, role=Role.ROLE_USER, parts=[Part(text=json.dumps(payload, sort_keys=True, separators=(",", ":")))], metadata={"beacon_provenance": envelope} if envelope else {})
     client = await ClientFactory(ClientConfig(streaming=False)).create_from_url(f"http://127.0.0.1:{port}")
     started = time.perf_counter_ns()
     decision: dict[str, Any] | None = None
@@ -87,7 +88,7 @@ async def send(port: int, scenario: str, run_id: str) -> dict[str, Any]:
             text = "".join(part.text for part in response.task.status.message.parts if part.text)
             if text:
                 decision = json.loads(text)
-    return {"scenario": scenario, "message_id": message_id, "decision": decision, "request_latency_ms": (time.perf_counter_ns() - started) / 1_000_000, "application_payload_bytes": payload_bytes}
+    return {"scenario": scenario, "message_id": message_id, "transport_message_id": transport_message_id, "decision": decision, "request_latency_ms": (time.perf_counter_ns() - started) / 1_000_000, "application_payload_bytes": payload_bytes}
 
 
 def run_condition(condition: str, scenario: str, repetitions: int, output: Path) -> list[dict[str, Any]]:
@@ -99,7 +100,11 @@ def run_condition(condition: str, scenario: str, repetitions: int, output: Path)
         wait_ready(port)
         startup_ms = (time.perf_counter_ns() - startup) / 1_000_000
         asyncio.run(send(port, scenario, "warmup"))
-        observations = [asyncio.run(send(port, scenario, f"{condition}-{scenario}-{index}")) for index in range(repetitions)]
+        observations = []
+        for index in range(repetitions):
+            observation = asyncio.run(send(port, scenario, f"{condition}-{scenario}-{index}"))
+            observation["repetition_index"] = index
+            observations.append(observation)
         workset_counts = counts(workset)
         for item in observations:
             item.update({"condition": condition, "startup_ms": startup_ms, "workset": workset.name, **workset_counts})

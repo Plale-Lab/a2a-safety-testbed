@@ -14,9 +14,15 @@ def initialize(path: Path) -> None:
         db.execute("CREATE TABLE IF NOT EXISTS incidents (message_id TEXT, code TEXT, detail_json TEXT)")
 
 
-def accept(path: Path, message_id: str, source_agent_id: str | None, envelope: dict[str, Any] | None, descriptors: list[dict[str, Any]]) -> None:
+def accept(path: Path, message_id: str, source_agent_id: str | None, envelope: dict[str, Any] | None, descriptors: list[dict[str, Any]]) -> bool:
+    """Persist a batch once, using ``message_id`` as its idempotency key.
+
+    Returns True only when this call inserted the batch. A repeated delivery with
+    the same key is a successful no-op rather than an integrity error.
+    """
     with sqlite3.connect(path) as db:
-        db.execute("INSERT INTO accepted_batches VALUES (?, ?, ?, ?)", (message_id, source_agent_id, json.dumps(envelope, sort_keys=True), json.dumps(descriptors, sort_keys=True)))
+        cursor = db.execute("INSERT OR IGNORE INTO accepted_batches VALUES (?, ?, ?, ?)", (message_id, source_agent_id, json.dumps(envelope, sort_keys=True), json.dumps(descriptors, sort_keys=True)))
+        return cursor.rowcount == 1
 
 
 def incident(path: Path, message_id: str, code: str, detail: dict[str, Any]) -> None:

@@ -63,6 +63,14 @@ class AttributionTests(unittest.TestCase):
             accept(path, "second", "dataset_source", self.envelope, self.descriptors)
             self.assertEqual(counts(path), {"accepted_batches": 1, "incidents": 1})
 
+    def test_accept_is_idempotent_by_message_id(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "workset.sqlite"
+            initialize(path)
+            self.assertTrue(accept(path, self.message_id, "dataset_source", self.envelope, self.descriptors))
+            self.assertFalse(accept(path, self.message_id, "dataset_source", self.envelope, self.descriptors))
+            self.assertEqual(counts(path), {"accepted_batches": 1, "incidents": 0})
+
 
 if __name__ == "__main__":
     unittest.main()

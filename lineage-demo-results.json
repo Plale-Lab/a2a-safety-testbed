@@ -1,0 +1,41 @@
+{
+  "generated_at": "2026-09-25T19:14:34.045720+00:00",
+  "conditions": {
+    "baseline": "unmodified A2A without provenance verification",
+    "provenance_enabled": "signed digest-linked lineage verification"
+  },
+  "agents": [
+    "retrieval_agent",
+    "transformation_agent",
+    "summary_agent"
+  ],
+  "repetitions_per_scenario": 10,
+  "workers": 4,
+  "local_wall_seconds": 0.15674537501763552,
+  "clean_acceptance_rate": 1.0,
+  "baseline_attack_acceptance_rate": 1.0,
+  "per_attack_detection_rate": {
+    "missing-middle-record": 1.0,
+    "altered-transformation": 1.0,
+    "reordered-records": 1.0
+  },
+  "per_attack_incident_code": {
+    "missing-middle-record": "missing_intermediate_record",
+    "altered-transformation": "invalid_signature",
+    "reordered-records": "record_order_failure"
+  },
+  "overall_attack_detection_rate": 1.0,
+  "false_rejection_rate": 0.0,
+  "clean_lineage_completeness": 1.0,
+  "per_attack_verified_prefix_completeness": {
+    "missing-middle-record": 0.3333333333333333,
+    "altered-transformation": 0.3333333333333333,
+    "reordered-records": 0.3333333333333333
+  },
+  "median_verification_ms": 0.4364995,
+  "p95_verification_ms": 0.716792,
+  "median_verification_overhead_ms": 0.436249,
+  "median_clean_lineage_bytes": 2045.0,
+  "durable_consistency_rate": 1.0,
+  "single_machine_limitation": "Ray schedules independent local trials; timing does not establish multi-node scalability. Baseline decision timing is a minimal pass-through comparison."
+}

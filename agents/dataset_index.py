@@ -44,14 +44,18 @@ class DatasetIndexExecutor(AgentExecutor):
         descriptors = payload["descriptors"]
         if self.condition == "stock":
             decision = {"accepted": True, "reason": "stock condition does not enforce provenance", "incident_code": None}
-            accept(self.workset_path, message_id, envelope.get("source_agent_id") if envelope else None, envelope, descriptors)
+            processed = accept(self.workset_path, message_id, envelope.get("source_agent_id") if envelope else None, envelope, descriptors)
         else:
             verdict = verify_envelope(envelope, descriptors, self.trust_registry, self.manifest, expected_run_id=payload["run_id"], expected_message_id=message_id)
             decision = {"accepted": verdict.accepted, "reason": verdict.reason, "incident_code": verdict.incident_code, "authenticated_source": verdict.authenticated_source, "claimed_source": verdict.claimed_source}
             if verdict.accepted:
-                accept(self.workset_path, message_id, verdict.authenticated_source, envelope, descriptors)
+                processed = accept(self.workset_path, message_id, verdict.authenticated_source, envelope, descriptors)
             else:
                 incident(self.workset_path, message_id, verdict.incident_code or "rejected", decision)
+                processed = True
+        decision["idempotency_key"] = message_id
+        decision["processed"] = processed
+        decision["duplicate"] = not processed
         await updater.complete(message=updater.new_agent_message([Part(text=json.dumps(decision, sort_keys=True))]))
 
     async def cancel(self, context: RequestContext, event_queue: EventQueue) -> None:

@@ -97,8 +97,10 @@ Other modes: `python harness/collective.py` (clean run), `--inject-provenance-lo
 
 `harness/datasets.py` is a paired, deterministic evaluation for BEACON's
 attribution work.  A source agent sends five dataset descriptors to a separately
-run index agent over A2A.  `stock` A2A accepts the payload as supplied.  The
-`extended` condition verifies a signed, versioned provenance envelope and checks
+run index agent over A2A. The baseline condition—unmodified A2A without the
+provenance-verification extension—accepts the payload as supplied (the harness
+retains the raw identifier `stock`). The provenance-enabled condition (raw
+identifier `extended`) verifies a signed, versioned provenance envelope and checks
 the descriptors against an independently trusted manifest before atomically
 persisting them to a SQLite workset.
 
@@ -115,6 +117,51 @@ raw observations, incident evidence, SQLite worksets, and a Markdown report unde
 trust roots; this is an application-level experimental A2A extension, not a claim
 that Agent Cards themselves establish identity or that a signature establishes a
 dataset's truth.
+
+## Local Ray Core experiment
+
+`harness/ray_datasets.py` keeps the attribution code above unchanged and uses
+Ray tasks only to schedule the twelve independent condition/scenario cells. It
+runs a fresh sequential baseline, runs the same matrix with local Ray workers,
+checks that every acceptance outcome agrees, and exercises an application-level
+idempotency key with a duplicate delivery.
+
+```bash
+source venv/bin/activate
+pip install -r requirements.txt
+python -m unittest discover -s tests -v
+python harness/datasets.py --compare --repetitions 1  # sequential smoke test
+python harness/ray_datasets.py --repetitions 10 --workers 4
+```
+
+Each Ray task owns its A2A server process and SQLite workset. Generated raw data
+is written under `results/ray/<UTC timestamp>/`; the compact checked-in snapshot
+used by the formal meeting brief is `ray-demo-results.json`. See
+[`A2A_PROVENANCE_RESEARCH_BRIEF.md`](A2A_PROVENANCE_RESEARCH_BRIEF.md) for the research
+question, design, results, interpretation, and discussion prompts. This is
+deliberately Ray Core on one machine—there is no Ray Serve, Ray Data, Docker,
+Kubernetes, or multi-node scalability claim.
+
+## Three-agent provenance-lineage study
+
+`harness/lineage.py` evaluates a clean retrieve → filter → summarize chain
+against missing-middle-record, post-signing transformation mutation, and signed
+record reordering attacks. In the provenance-enabled condition,
+each agent appends an Ed25519-signed transformation record that binds its input,
+output, identity, sequence, and prior record digest. The baseline condition is
+unmodified pass-through without lineage verification.
+
+```bash
+source venv/bin/activate
+python -m unittest discover -s tests -v
+python harness/lineage.py --repetitions 10 --workers 4
+```
+
+The command writes structured observations and SQLite worksets under
+`results/lineage/<run-id>/` and refreshes `lineage-demo-results.json`. Ray is
+used only to schedule independent local trials. The provenance-lineage design,
+verification results, and limitations are documented in
+[`A2A_PROVENANCE_RESEARCH_BRIEF.md`](A2A_PROVENANCE_RESEARCH_BRIEF.md).
 
 ## Run agent_a standalone
 

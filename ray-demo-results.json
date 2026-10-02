@@ -1,0 +1,16 @@
+{
+  "generated_at": "2026-09-25T05:08:27.063142+00:00",
+  "ray_version": "2.58.0",
+  "python_version": "3.11.7",
+  "logical_cpus": 8,
+  "ray_workers": 4,
+  "repetitions_per_cell": 10,
+  "matrix_cells": 12,
+  "observations_per_mode": 120,
+  "outcomes_equivalent": true,
+  "sequential": {"wall_seconds": 9.778835457982495, "cells_per_second": 1.2271399852836629, "observations_per_second": 12.271399852836629, "driver_cpu_seconds": 2.759668, "driver_peak_rss_mib": 105.78125},
+  "ray": {"wall_seconds": 7.313527541991789, "cells_per_second": 1.6407950788590155, "observations_per_second": 16.407950788590156, "driver_cpu_seconds": 0.18327800000000005, "driver_peak_rss_mib": 118.8125},
+  "observed_speedup": 1.3370887580358106,
+  "duplicate_delivery": {"attempts_with_same_key": 2, "transport_ids_distinct": true, "first_processed": true, "retry_processed": false, "retry_marked_duplicate": true, "durable_rows": 1, "unique_key_control_rows": 2},
+  "limitations": "Single-machine run. Ray startup is included. CPU and RSS are driver-process observations, not whole-machine or cluster profiles."
+}
